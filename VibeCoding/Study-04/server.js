@@ -1,4 +1,5 @@
 // Created: 2026-09-11 19:47:57 +09:00
+// Modified: 2026-09-11 20:53:15 +09:00
 const http = require('node:http');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -9,7 +10,11 @@ const DATA_DIR = path.join(ROOT, 'data');
 const STORE_PATH = path.join(DATA_DIR, 'store.json');
 const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
 const MODEL = 'inclusionai/ling-3.0-flash-vl:free';
+const EXTERNAL_REQUEST_TIMEOUT_MS = 45 * 1000;
+const MAX_EXPENSIVE_REQUESTS_PER_CLIENT = 1;
 const MIME_TYPES = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8' };
+const activeExpensiveRequests = new Map();
+let storeWriteQueue = Promise.resolve();
 
 function loadEnv() {
   const envPath = path.join(ROOT, '.env');
@@ -62,6 +67,42 @@ function readStore() {
 function writeStore(store) {
   fs.mkdirSync(DATA_DIR, { recursive: true });
   fs.writeFileSync(STORE_PATH, JSON.stringify(store, null, 2));
+}
+
+function updateStore(mutator) {
+  const operation = storeWriteQueue.then(async () => {
+    const store = readStore();
+    const result = await mutator(store);
+    writeStore(store);
+    return result;
+  });
+  storeWriteQueue = operation.catch(() => undefined);
+  return operation;
+}
+
+function clientKey(request) {
+  return request.socket?.remoteAddress || 'unknown';
+}
+
+function acquireExpensiveRequest(request, endpoint) {
+  const key = `${endpoint}:${clientKey(request)}`;
+  const active = activeExpensiveRequests.get(key) || 0;
+  if (active >= MAX_EXPENSIVE_REQUESTS_PER_CLIENT) return null;
+  activeExpensiveRequests.set(key, active + 1);
+  return () => {
+    const remaining = (activeExpensiveRequests.get(key) || 1) - 1;
+    if (remaining > 0) activeExpensiveRequests.set(key, remaining);
+    else activeExpensiveRequests.delete(key);
+  };
+}
+
+function sendRateLimited(response) {
+  response.setHeader('Retry-After', '1');
+  sendJson(response, 429, { error: '요청이 이미 처리 중입니다. 잠시 후 다시 시도해 주세요.' });
+}
+
+function externalFetch(url, options) {
+  return fetch(url, { ...options, signal: AbortSignal.timeout(EXTERNAL_REQUEST_TIMEOUT_MS) });
 }
 
 function normalizeProfile(input, current = {}) {
@@ -170,7 +211,7 @@ async function recognize(image) {
     max_tokens: 512,
     reasoning: { effort: 'none' }
   };
-  const result = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+  const result = await externalFetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost', 'X-Title': 'Fridge ingredient recognition' },
     body: JSON.stringify(payload)
@@ -205,7 +246,7 @@ async function recommendRecipes(input) {
   let lastError;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const result = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      const result = await externalFetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST', headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'HTTP-Referer': 'http://localhost', 'X-Title': 'Fridge recipe recommendation' }, body: JSON.stringify(payload)
       });
       const data = await result.json();
@@ -234,28 +275,53 @@ async function handle(request, response) {
     response.end(fs.readFileSync(filePath));
     return;
   }
+  if (request.method === 'POST' && request.url === '/api/recipes/recommend') {
+    const release = acquireExpensiveRequest(request, 'recommend');
+    if (!release) return sendRateLimited(response);
+    try { sendJson(response, 200, await recommendRecipes(await readJsonBody(request))); }
+    catch (error) { const status = error.status || (error.message === 'ingredients_required' || error.message === 'invalid_json' ? 400 : 502); sendJson(response, status, { error: status === 400 ? '재료 목록을 확인해 주세요.' : '레시피 생성에 실패했습니다.', detail: error.message }); }
+    finally { release(); }
+    return;
+  }
+  if (request.method === 'POST' && request.url === '/api/ingredients/recognize') {
+    const release = acquireExpensiveRequest(request, 'recognize');
+    if (!release) return sendRateLimited(response);
+    try {
+      const image = parseImage(request, await readBody(request));
+      const result = await recognize(image);
+      sendJson(response, 200, result);
+    } catch (error) {
+      const status = error.status || (error.message === 'missing_api_key' ? 500 : error.message.includes('invalid') || error.message.includes('unsupported') || error.message.includes('missing_file') ? 400 : 502);
+      sendJson(response, status, { error: status === 400 ? '이미지 파일을 확인해 주세요.' : '이미지 인식에 실패했습니다.', detail: error.message });
+    } finally { release(); }
+    return;
+  }
   if (request.url.startsWith('/api/')) {
     const userId = getUserId(request, response);
-    const store = readStore();
+    const store = ['GET', 'DELETE'].includes(request.method) ? readStore() : null;
     if (request.method === 'GET' && request.url === '/api/profile') {
       sendJson(response, 200, store.profiles[userId] || null);
       return;
     }
     if (['POST', 'PATCH'].includes(request.method) && request.url === '/api/profile') {
       try {
-        const profile = normalizeProfile(await readJsonBody(request), store.profiles[userId] || {});
-        if (!profile.displayName) throw new Error('display_name_required');
-        const now = new Date().toISOString();
-        store.profiles[userId] = { id: userId, ...profile, createdAt: store.profiles[userId]?.createdAt || now, updatedAt: now };
-        writeStore(store);
-        sendJson(response, 200, store.profiles[userId]);
+        const input = await readJsonBody(request);
+        const savedProfile = await updateStore((currentStore) => {
+          const profile = normalizeProfile(input, currentStore.profiles[userId] || {});
+          if (!profile.displayName) throw new Error('display_name_required');
+          const now = new Date().toISOString();
+          currentStore.profiles[userId] = { id: userId, ...profile, createdAt: currentStore.profiles[userId]?.createdAt || now, updatedAt: now };
+          return currentStore.profiles[userId];
+        });
+        sendJson(response, 200, savedProfile);
       } catch (error) { sendJson(response, 400, { error: '프로필 정보를 확인해 주세요.', detail: error.message }); }
       return;
     }
     if (request.method === 'DELETE' && request.url === '/api/profile') {
-      delete store.profiles[userId];
-      Object.keys(store.recipes).filter((id) => store.recipes[id].userId === userId).forEach((id) => delete store.recipes[id]);
-      writeStore(store); sendJson(response, 200, { deleted: true });
+      updateStore((currentStore) => {
+        delete currentStore.profiles[userId];
+        Object.keys(currentStore.recipes).filter((id) => currentStore.recipes[id].userId === userId).forEach((id) => delete currentStore.recipes[id]);
+      }).then(() => sendJson(response, 200, { deleted: true })).catch(() => sendJson(response, 500, { error: 'server_error' }));
       return;
     }
     if (request.method === 'GET' && request.url.startsWith('/api/recipes/saved')) {
@@ -277,35 +343,28 @@ async function handle(request, response) {
     if (request.method === 'POST' && request.url === '/api/recipes/saved') {
       try {
         const input = normalizeSavedRecipe(await readJsonBody(request));
-        const duplicate = Object.values(store.recipes).find((item) => item.userId === userId && recipeKey(item.recipe) === recipeKey(input.recipe));
-        if (duplicate) { sendJson(response, 200, duplicate); return; }
-        const now = new Date().toISOString();
-        const saved = { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`, userId, recipe: input.recipe, sourceIngredients: input.sourceIngredients, createdAt: now, updatedAt: now };
-        store.recipes[saved.id] = saved; writeStore(store); sendJson(response, 201, saved);
+        const result = await updateStore((currentStore) => {
+          const duplicate = Object.values(currentStore.recipes).find((item) => item.userId === userId && recipeKey(item.recipe) === recipeKey(input.recipe));
+          if (duplicate) return { status: 200, item: duplicate };
+          const now = new Date().toISOString();
+          const saved = { id: `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`, userId, recipe: input.recipe, sourceIngredients: input.sourceIngredients, createdAt: now, updatedAt: now };
+          currentStore.recipes[saved.id] = saved;
+          return { status: 201, item: saved };
+        });
+        sendJson(response, result.status, result.item);
       } catch (error) { sendJson(response, 400, { error: '저장할 레시피를 확인해 주세요.', detail: error.message }); }
       return;
     }
     if (request.method === 'DELETE' && request.url.startsWith('/api/recipes/saved/')) {
       const recipeId = request.url.split('/').pop();
       if (!store.recipes[recipeId] || store.recipes[recipeId].userId !== userId) { sendJson(response, 404, { error: 'not_found' }); return; }
-      delete store.recipes[recipeId]; writeStore(store); sendJson(response, 200, { deleted: true });
+      updateStore((currentStore) => {
+        if (currentStore.recipes[recipeId]?.userId === userId) delete currentStore.recipes[recipeId];
+      }).then(() => sendJson(response, 200, { deleted: true })).catch(() => sendJson(response, 500, { error: 'server_error' }));
       return;
     }
   }
-  if (request.method === 'POST' && request.url === '/api/recipes/recommend') {
-    try { sendJson(response, 200, await recommendRecipes(await readJsonBody(request))); }
-    catch (error) { const status = error.status || (error.message === 'ingredients_required' || error.message === 'invalid_json' ? 400 : 502); sendJson(response, status, { error: status === 400 ? '재료 목록을 확인해 주세요.' : '레시피 생성에 실패했습니다.', detail: error.message }); }
-    return;
-  }
-  if (request.method !== 'POST' || request.url !== '/api/ingredients/recognize') return sendJson(response, 404, { error: 'not_found' });
-  try {
-    const image = parseImage(request, await readBody(request));
-    const result = await recognize(image);
-    sendJson(response, 200, result);
-  } catch (error) {
-    const status = error.status || (error.message === 'missing_api_key' ? 500 : error.message.includes('invalid') || error.message.includes('unsupported') || error.message.includes('missing_file') ? 400 : 502);
-    sendJson(response, status, { error: status === 400 ? '이미지 파일을 확인해 주세요.' : '이미지 인식에 실패했습니다.', detail: error.message });
-  }
+  return sendJson(response, 404, { error: 'not_found' });
 }
 
 loadEnv();

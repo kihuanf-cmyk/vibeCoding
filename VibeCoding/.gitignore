@@ -1,0 +1,6 @@
+# Created: 2026-09-11 19:38:38 +09:00
+.env
+.env.*
+!.env.example
+
+data/*.json

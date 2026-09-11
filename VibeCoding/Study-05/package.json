@@ -1,0 +1,12 @@
+{
+  "name": "study-05-empathy-diary",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Dependency-free AI empathy diary server",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
