@@ -1,0 +1,12 @@
+{
+  "name": "fridge-recipe-study-04",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Step 1 refrigerator ingredient recognition app",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

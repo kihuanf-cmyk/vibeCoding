@@ -1,0 +1,67 @@
+<!-- File timestamp: 2026-09-09 20:22:20 +09:00 -->
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>개인용 할 일 관리</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="todo-app">
+    <header class="title-area">
+      <span class="eyebrow">PERSONAL PLANNER</span>
+      <h1>My Tasks</h1>
+      <p>오늘 해야 할 일을 차분하게 정리해 보세요.</p>
+    </header>
+
+    <section class="progress-area" aria-label="진행률">
+      <div class="progress-header">
+        <h2>진행률</h2>
+        <span id="progress-text">0%</span>
+      </div>
+      <progress id="progress-bar" value="0" max="100">0%</progress>
+      <div class="category-summary" aria-label="카테고리별 진행률">
+        <article class="category-summary-card" data-category="업무">
+          <span class="category-label">업무</span>
+          <strong class="category-count">0/0</strong>
+          <progress class="category-progress" value="0" max="100">0%</progress>
+        </article>
+        <article class="category-summary-card" data-category="개인">
+          <span class="category-label">개인</span>
+          <strong class="category-count">0/0</strong>
+          <progress class="category-progress" value="0" max="100">0%</progress>
+        </article>
+        <article class="category-summary-card" data-category="공부">
+          <span class="category-label">공부</span>
+          <strong class="category-count">0/0</strong>
+          <progress class="category-progress" value="0" max="100">0%</progress>
+        </article>
+      </div>
+    </section>
+
+    <nav class="category-filters" aria-label="카테고리 필터">
+      <button type="button" class="filter-button active" data-category="전체">전체</button>
+      <button type="button" class="filter-button" data-category="업무">업무</button>
+      <button type="button" class="filter-button" data-category="개인">개인</button>
+      <button type="button" class="filter-button" data-category="공부">공부</button>
+    </nav>
+
+    <section class="todo-form" aria-label="할 일 추가">
+      <input type="text" id="todo-input" placeholder="할 일을 입력하세요..." aria-label="할 일 입력">
+      <select id="category-select" aria-label="카테고리 선택">
+        <option value="업무">업무</option>
+        <option value="개인">개인</option>
+        <option value="공부">공부</option>
+      </select>
+      <button type="button" id="add-button">추가</button>
+    </section>
+
+    <section class="todo-list-area" aria-label="할 일 목록">
+      <ul id="todo-list"></ul>
+    </section>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>

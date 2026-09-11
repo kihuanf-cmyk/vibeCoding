@@ -1,0 +1,365 @@
+/* File timestamp: 2026-09-09 20:22:20 +09:00 */
+
+:root {
+  --ink: #25243a;
+  --muted: #8b8a9b;
+  --line: #e8e8f0;
+  --purple: #6654d8;
+  --purple-dark: #5040b7;
+  --panel: #f6f6fa;
+  --work: #4d93d6;
+  --personal: #38b878;
+  --study: #9b67d5;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  padding: 2.5rem 1rem;
+  color: var(--ink);
+  background: linear-gradient(135deg, #6655cf 0%, #8770d6 100%);
+  font-family: "Trebuchet MS", "Malgun Gothic", sans-serif;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+.todo-app {
+  width: min(100%, 700px);
+  min-height: calc(100vh - 5rem);
+  margin: 0 auto;
+  padding: 2rem clamp(1.25rem, 5vw, 3rem) 3rem;
+  background: #fff;
+  border-radius: 28px;
+  box-shadow: 0 24px 55px rgb(48 31 117 / 25%);
+}
+
+.title-area {
+  margin-bottom: 1.75rem;
+  text-align: center;
+}
+
+.eyebrow {
+  color: var(--purple);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+
+.title-area h1 {
+  margin: 0.35rem 0 0.45rem;
+  font-size: clamp(2rem, 7vw, 3rem);
+  letter-spacing: 0;
+}
+
+.title-area p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.progress-area {
+  margin-bottom: 1.5rem;
+  padding: 1.25rem;
+  background: var(--panel);
+  border: 1px solid #efeff5;
+  border-radius: 18px;
+}
+
+.progress-header,
+.category-filters,
+.todo-form {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.progress-header {
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.progress-header h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+#progress-text {
+  color: var(--purple-dark);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+progress {
+  display: block;
+  width: 100%;
+  height: 0.6rem;
+  overflow: hidden;
+  border: 0;
+  border-radius: 999px;
+  background: #dedee7;
+  accent-color: var(--purple);
+}
+
+progress::-webkit-progress-bar {
+  background: #dedee7;
+  border-radius: 999px;
+}
+
+progress::-webkit-progress-value {
+  background: var(--purple);
+  border-radius: 999px;
+}
+
+progress::-moz-progress-bar {
+  background: var(--purple);
+  border-radius: 999px;
+}
+
+.category-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+.category-summary-card {
+  padding: 0.85rem 0.75rem 0.7rem;
+  text-align: center;
+  background: #fff;
+  border-radius: 12px;
+}
+
+.category-label,
+.category-count {
+  display: block;
+}
+
+.category-label {
+  margin-bottom: 0.35rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.category-summary-card[data-category="업무"] .category-label {
+  color: var(--work);
+}
+
+.category-summary-card[data-category="개인"] .category-label {
+  color: var(--personal);
+}
+
+.category-summary-card[data-category="공부"] .category-label {
+  color: var(--study);
+}
+
+.category-count {
+  margin-bottom: 0.55rem;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.category-progress {
+  height: 0.3rem;
+}
+
+.category-summary-card[data-category="업무"] .category-progress {
+  accent-color: var(--work);
+}
+
+.category-summary-card[data-category="개인"] .category-progress {
+  accent-color: var(--personal);
+}
+
+.category-summary-card[data-category="공부"] .category-progress {
+  accent-color: var(--study);
+}
+
+.category-filters {
+  justify-content: center;
+  margin-bottom: 1.25rem;
+}
+
+.filter-button {
+  min-width: 4.25rem;
+  padding: 0.65rem 1rem;
+  color: #777687;
+  background: #f3f3f6;
+  border: 0;
+  border-radius: 999px;
+  transition: background-color 160ms ease, color 160ms ease;
+}
+
+.filter-button.active {
+  color: #fff;
+  font-weight: 700;
+  background: var(--ink);
+}
+
+.todo-form {
+  margin-bottom: 1.5rem;
+}
+
+#todo-input,
+#category-select,
+.edit-input {
+  min-height: 3rem;
+  padding: 0 1rem;
+  color: var(--ink);
+  background: #fff;
+  border: 1px solid #dcdce5;
+  border-radius: 12px;
+  outline: 0;
+}
+
+#todo-input {
+  flex: 1;
+  min-width: 0;
+}
+
+#todo-input:focus,
+#category-select:focus,
+.edit-input:focus {
+  border-color: var(--purple);
+  box-shadow: 0 0 0 3px rgb(102 84 216 / 14%);
+}
+
+#category-select {
+  width: 7rem;
+}
+
+#add-button {
+  min-height: 3rem;
+  padding: 0 1.3rem;
+  color: #fff;
+  font-weight: 700;
+  background: var(--purple);
+  border: 0;
+  border-radius: 12px;
+  box-shadow: 0 8px 16px rgb(102 84 216 / 20%);
+}
+
+#add-button:hover {
+  background: var(--purple-dark);
+}
+
+.todo-list-area ul {
+  display: grid;
+  gap: 0.65rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.todo-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 4.25rem;
+  padding: 0.85rem 1rem;
+  background: #f8f8fb;
+  border: 1px solid #f0f0f5;
+  border-radius: 14px;
+}
+
+.todo-item > input[type="checkbox"] {
+  width: 1.35rem;
+  height: 1.35rem;
+  flex: 0 0 auto;
+  accent-color: var(--purple);
+}
+
+.todo-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 0.65rem;
+}
+
+.todo-text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 0.98rem;
+}
+
+.todo-text.completed {
+  color: #aaa9b3;
+  text-decoration: line-through;
+}
+
+.todo-category {
+  flex: 0 0 auto;
+  padding: 0.3rem 0.65rem;
+  color: #fff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border-radius: 999px;
+}
+
+.todo-category[data-category="업무"] {
+  background: var(--work);
+}
+
+.todo-category[data-category="개인"] {
+  background: var(--personal);
+}
+
+.todo-category[data-category="공부"] {
+  background: var(--study);
+}
+
+.todo-item button {
+  flex: 0 0 auto;
+  padding: 0.35rem 0.45rem;
+  color: #9b9aa8;
+  background: transparent;
+  border: 0;
+}
+
+.todo-item button:hover {
+  color: var(--purple-dark);
+}
+
+.edit-input {
+  flex: 1;
+  min-width: 0;
+}
+
+@media (max-width: 600px) {
+  body {
+    padding: 0;
+  }
+
+  .todo-app {
+    min-height: 100vh;
+    border-radius: 0;
+  }
+
+  .todo-form {
+    flex-wrap: wrap;
+  }
+
+  #todo-input {
+    flex-basis: 100%;
+  }
+
+  #category-select {
+    flex: 1;
+  }
+
+  #add-button {
+    flex: 1;
+  }
+}
